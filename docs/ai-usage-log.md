@@ -147,4 +147,37 @@ Claude Code (Anthropic CLI agent).
 22. "commit and push this, along with the our history" — committing the service/repository
     implementation and this log.
 
+23. "let's start the testing discussion" — proposed a testing strategy split by layer
+    (domain: pure unit tests; service/repository: integration tests against a real Postgres,
+    covering design.md's documented scenarios) and asked about test-DB setup and unit/
+    integration separation.
+
+24. "I will start with units first" — deferred the integration-test infra decision; user
+    went on to write domain unit tests independently.
+
+25. "check the unit tests in domain please" — reviewed transfer_test.go/ledger_test.go/
+    wallet_test.go: ran them (all passing) and found TestTransfer_MarkProcessed/MarkFailed's
+    "succeeds" cases only asserted on the returned error, never on the resulting Status/
+    FailureReason — so the tests wouldn't catch a regression where the mutation itself broke
+    or was removed. Also noted the `domain, _ := domain.NewPendingTransfer(...)` pattern
+    shadows the package name (works, but reads confusingly).
+
+26. Asked to do a hands-on mutation check (temporarily break MarkFailed's mutation, confirm
+    tests still pass, then revert) to demonstrate the gap concretely; user asked why before
+    approving, so it was explained and skipped in favor of just walking through the gap in
+    the existing assertions instead — no source was actually changed.
+
+27. "fixed, check now" (first pass) — confirmed TestNewPendingTransfer now asserts Status/
+    FailureReason, and MarkFailed's "empty reason defaults" case now actually asserts
+    `*FailureReason == "unspecified"`. Flagged a residual, lower-severity gap: the rejected-
+    transition rows reused the input reason string as `wantReason`, so the "FailureReason
+    stays nil on rejection" invariant wasn't actually being exercised — a bug that wrongly
+    applied the reason on a rejected transition could hide behind the `!= nil` guard.
+
+28. "fixed, check now" (second pass) — confirmed the fix now branches on `tc.wantErr` to
+    unconditionally require `FailureReason == nil` on rejection instead of comparing against
+    the reused input string. All domain tests pass; go vet/gofmt clean.
+
+29. "commit and push this" — committing the domain unit test suite.
+
 <!-- Append new prompts below, in order, as the session continues. -->
