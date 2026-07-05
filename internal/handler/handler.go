@@ -4,6 +4,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/ravindranathreddy/wallet-transfer-assignment/internal/domain"
@@ -66,7 +67,42 @@ func (h *TransferHandler) CreateTransfer(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, domain.ErrInvalidAmount.Error())
 		return
 	}
-	writeError(w, http.StatusNotImplemented, "not implemented")
+	transfer, err := h.service.CreateTransfer(r.Context(), service.CreateTransferRequest{
+		IdempotencyKey: req.IdempotencyKey,
+		FromWalletID:   req.FromWalletID,
+		ToWalletID:     req.ToWalletID,
+		Amount:         req.Amount,
+	})
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, transferResponseDTO{
+		TransferID:    transfer.ID.String(),
+		Status:        string(transfer.Status),
+		FromWalletID:  transfer.FromWalletID,
+		ToWalletID:    transfer.ToWalletID,
+		Amount:        transfer.Amount,
+		FailureReason: transfer.FailureReason,
+		CreatedAt:     transfer.CreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+	})
+}
+
+func writeDomainError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, domain.ErrSameWallet),
+		errors.Is(err, domain.ErrInvalidAmount),
+		errors.Is(err, domain.ErrWalletIdRequired),
+		errors.Is(err, domain.ErrIdempotencyKeyRequired):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, domain.ErrWalletNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, domain.ErrIdempotencyKeyConflict):
+		writeError(w, http.StatusConflict, err.Error())
+	default:
+		writeError(w, http.StatusInternalServerError, "internal server error")
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

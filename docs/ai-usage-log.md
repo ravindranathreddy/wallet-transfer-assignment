@@ -99,4 +99,52 @@ Claude Code (Anthropic CLI agent).
 15. "commit this" — committed the domain model (Wallet, Transfer state machine,
     LedgerEntry, IdempotencyRecord) and CreateTransfer request validation.
 
+16. "commit and push this. let me service and repository" — committed/pushed the domain
+    model and handler validation; user went on to implement the service and repository
+    layers independently.
+
+17. "I have implemented service and repository. Please review" — reviewed
+    TransferService, WalletRepository, TransferRepository, LedgerRepository,
+    IdempotencyRepository as a senior-engineer pass. Confirmed the idempotency
+    check-then-insert race is handled correctly (matches design.md's documented approach)
+    and wallet balance math is race-safe under the FOR UPDATE lock. Flagged one real
+    concurrency bug: `processTransfer` read the transfer row without `FOR UPDATE`, so two
+    concurrent replays of the same idempotencyKey could both pass the PENDING check before
+    either committed — the second would double-attempt the debit/credit and only get saved
+    by the `ledger_entries` UNIQUE constraint rolling it back, but it would then surface a
+    raw Postgres error instead of the idempotent success response. Also flagged a
+    delimiter-collision risk in computeRequestHash's string formatting, and an untruncated
+    timestamp inconsistency in IdempotencyRecord.CreatedAt. No code written on the user's
+    behalf — findings only.
+
+18. "Locked transfer row in processTransfer, In computeRequestHash removed |,
+    IdempotencyRecord.CreatedAt truncated to microsecond. GetWalletByID existence check ...
+    Did not get LockForUpdate suggestion" — re-checked the fixes: found the build broken
+    (service.go called a new TransferRepository.LockForUpdate method that hadn't been
+    added/saved yet); clarified the WalletRepository.LockForUpdate note was a minor
+    round-trip efficiency remark (batch the two single-row locks into one `WHERE id =
+    ANY($1)` query), not a correctness issue.
+
+19. "forgot to save check now." — rebuilt clean; confirmed the new
+    TransferRepository.LockForUpdate (with FOR UPDATE, called before the pending-status
+    check) correctly closes the race. Flagged that the delimiter fix in computeRequestHash
+    had gone the wrong way — removing the separator entirely (`"%s%s%d"`) made field-boundary
+    collisions *more* likely, not less, since now any split point between the two wallet IDs
+    collides.
+
+20. "fixed the delimiter, GetTransferByID we moved to lock own right?" — confirmed
+    processTransfer now calls the new LockForUpdate instead of GetTransferByID (which is
+    unused for now, not necessarily dead — could back a future read endpoint). Ran `go vet`
+    on the "fixed" delimiter and caught a real bug: the format string had 5 verbs against 3
+    arguments, feeding a string into a `%d` verb — Sprintf doesn't panic on this, it embeds
+    an error placeholder and keeps going, so the hash was being computed over garbled text.
+
+21. "Aah check now" — verified the corrected computeRequestHash (length-prefixing each
+    field: `len(fromWalletID):fromWalletID,len(toWalletID):toWalletID,amount`), which
+    unambiguously encodes field boundaries regardless of wallet-ID contents. go vet, go
+    build, and gofmt all clean.
+
+22. "commit and push this, along with the our history" — committing the service/repository
+    implementation and this log.
+
 <!-- Append new prompts below, in order, as the session continues. -->

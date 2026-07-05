@@ -12,6 +12,10 @@ var (
 
 	ErrInvalidTransition = errors.New("invalid state transition")
 
-	ErrIdempotencyKeyRequired = errors.New("idempotencyKey is required")
-	ErrWalletIdRequired       = errors.New("WalletId cannot be empty")
+	ErrIdempotencyKeyRequired    = errors.New("idempotencyKey is required")
+	ErrWalletIdRequired          = errors.New("WalletId cannot be empty")
+	ErrWalletNotFound            = errors.New("wallet not found")
+	ErrIdempotencyKeyConflict    = errors.New("idempotency key conflict: a transfer with the same idempotency key already exists")
+	ErrIdempotencyRecordNotFound = errors.New("idempotency record not found")
+	ErrTransferNotFound          = errors.New("transfer not found")
 )
