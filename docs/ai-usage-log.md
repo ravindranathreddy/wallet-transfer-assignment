@@ -221,4 +221,12 @@ Claude Code (Anthropic CLI agent).
 
 35. "commit and push this" — committing the CI wiring and handler test suite.
 
+36. "fix the make fmt gate" — rewrote the Makefile's `fmt` target so it actually fails
+    (non-zero exit) when `gofmt -l .` lists any file, instead of always exiting 0; added
+    `fmt-write` (gofmt -w .) as the corresponding auto-fix target. Verified by deliberately
+    adding a misformatted file, confirming `make fmt` failed, then removing it and confirming
+    a clean pass.
+
+37. "commit and push" — committing the Makefile fix.
+
 <!-- Append new prompts below, in order, as the session continues. -->

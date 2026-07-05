@@ -1,4 +1,4 @@
-.PHONY: build run test test-integration fmt lint tidy \
+.PHONY: build run test test-integration fmt fmt-write lint tidy \
 	docker-up docker-down docker-logs \
 	migrate-create migrate-up migrate-down
 
@@ -22,8 +22,19 @@ test:
 test-integration:
 	go test -tags=integration -p 1 ./...
 
+# Fails (non-zero exit) if any file is not gofmt'd -- gofmt -l alone only
+# lists offenders and always exits 0, so it can't gate CI by itself.
 fmt:
-	gofmt -l .
+	@unformatted="$$(gofmt -l .)"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "The following files are not gofmt'd:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+
+# Applies gofmt in place.
+fmt-write:
+	gofmt -w .
 
 lint:
 	golangci-lint run
