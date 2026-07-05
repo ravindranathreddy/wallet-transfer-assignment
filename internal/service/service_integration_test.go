@@ -244,3 +244,59 @@ func TestCreateTransfer_IdempotencyConflict_DifferentBody(t *testing.T) {
 		t.Errorf("expected exactly 1 transfer to exist, got %d", transferCount)
 	}
 }
+
+// TestCreateTransfer_IdempotentReplay_FailedTransfer mirrors
+// TestCreateTransfer_IdempotentReplay_SameBody, but for a transfer that
+// resolved to FAILED (insufficient balance) rather than PROCESSED. Replaying
+// the same key must return the same FAILED transfer again, not attempt to
+// reprocess it or return an error.
+func TestCreateTransfer_IdempotentReplay_FailedTransfer(t *testing.T) {
+	svc, pool := newTestService(t)
+	testutil.SeedWallet(t, pool, "wallet_1", 50)
+	testutil.SeedWallet(t, pool, "wallet_2", 0)
+
+	req := service.CreateTransferRequest{
+		IdempotencyKey: "key-replay-failed",
+		FromWalletID:   "wallet_1",
+		ToWalletID:     "wallet_2",
+		Amount:         200,
+	}
+
+	first, err := svc.CreateTransfer(context.Background(), req)
+	if err != nil {
+		t.Fatalf("first call: unexpected error: %v", err)
+	}
+	if first.Status != domain.StatusFailed {
+		t.Fatalf("expected first call status FAILED, got %s", first.Status)
+	}
+
+	second, err := svc.CreateTransfer(context.Background(), req)
+	if err != nil {
+		t.Fatalf("second call: unexpected error: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Errorf("expected replay to return the same transfer ID %s, got %s", first.ID, second.ID)
+	}
+	if second.Status != domain.StatusFailed {
+		t.Errorf("expected replay status FAILED, got %s", second.Status)
+	}
+	if second.FailureReason == nil || *second.FailureReason != "insufficient balance" {
+		t.Errorf("expected replay failure reason %q, got %v", "insufficient balance", second.FailureReason)
+	}
+
+	var fromBalance, toBalance int64
+	mustScan(t, pool, `SELECT balance FROM wallets WHERE id = $1`, []any{"wallet_1"}, &fromBalance)
+	mustScan(t, pool, `SELECT balance FROM wallets WHERE id = $1`, []any{"wallet_2"}, &toBalance)
+	if fromBalance != 50 {
+		t.Errorf("expected wallet_1 balance unchanged at 50, got %d", fromBalance)
+	}
+	if toBalance != 0 {
+		t.Errorf("expected wallet_2 balance unchanged at 0, got %d", toBalance)
+	}
+
+	var transferCount int
+	mustScan(t, pool, `SELECT COUNT(*) FROM transfers`, nil, &transferCount)
+	if transferCount != 1 {
+		t.Errorf("expected exactly 1 transfer to exist, got %d", transferCount)
+	}
+}

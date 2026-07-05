@@ -268,3 +268,69 @@ func TestCreateTransfer_CircularChain_NoDeadlock(t *testing.T) {
 		t.Errorf("expected all balances conserved at 100 each (net zero movement per wallet), got a=%d b=%d c=%d", balanceA, balanceB, balanceC)
 	}
 }
+
+// TestCreateTransfer_ConcurrentBatch_LedgerReconcilesWithBalances fires a
+// mixed batch of transfers concurrently (some affordable, one deliberately
+// not) across a small set of wallets, then proves each wallet's stored
+// balance exactly reconciles against its own ledger entries -- computed
+// independently via SUM(...) over ledger_entries, not by trusting whatever
+// internal bookkeeping the service used -- and that the total balance
+// across all wallets is conserved.
+func TestCreateTransfer_ConcurrentBatch_LedgerReconcilesWithBalances(t *testing.T) {
+	svc, pool := newTestService(t)
+	wallets := []string{"wallet_1", "wallet_2", "wallet_3", "wallet_4"}
+	const initialBalance = int64(500)
+	for _, w := range wallets {
+		testutil.SeedWallet(t, pool, w, initialBalance)
+	}
+
+	requests := []service.CreateTransferRequest{
+		{IdempotencyKey: "batch-1", FromWalletID: "wallet_1", ToWalletID: "wallet_2", Amount: 100},
+		{IdempotencyKey: "batch-2", FromWalletID: "wallet_2", ToWalletID: "wallet_3", Amount: 200},
+		{IdempotencyKey: "batch-3", FromWalletID: "wallet_3", ToWalletID: "wallet_4", Amount: 300},
+		{IdempotencyKey: "batch-4", FromWalletID: "wallet_4", ToWalletID: "wallet_1", Amount: 50},
+		{IdempotencyKey: "batch-5", FromWalletID: "wallet_1", ToWalletID: "wallet_3", Amount: 10000}, // insufficient balance
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(requests))
+	for _, req := range requests {
+		go func(req service.CreateTransferRequest) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if _, err := svc.CreateTransfer(ctx, req); err != nil {
+				t.Errorf("transfer %s: unexpected error: %v", req.IdempotencyKey, err)
+			}
+		}(req)
+	}
+	wg.Wait()
+
+	var totalBalance int64
+	for _, w := range wallets {
+		var balance int64
+		mustScan(t, pool, `SELECT balance FROM wallets WHERE id = $1`, []any{w}, &balance)
+		totalBalance += balance
+
+		var credited, debited int64
+		mustScan(t, pool, `SELECT COALESCE(SUM(amount), 0) FROM ledger_entries WHERE wallet_id = $1 AND type = 'CREDIT'`, []any{w}, &credited)
+		mustScan(t, pool, `SELECT COALESCE(SUM(amount), 0) FROM ledger_entries WHERE wallet_id = $1 AND type = 'DEBIT'`, []any{w}, &debited)
+
+		expected := initialBalance + credited - debited
+		if balance != expected {
+			t.Errorf("wallet %s: balance %d does not reconcile with ledger (initial %d + credited %d - debited %d = %d)",
+				w, balance, initialBalance, credited, debited, expected)
+		}
+	}
+
+	if totalBalance != initialBalance*int64(len(wallets)) {
+		t.Errorf("expected total balance conserved at %d, got %d", initialBalance*int64(len(wallets)), totalBalance)
+	}
+
+	var debitCount, creditCount int
+	mustScan(t, pool, `SELECT COUNT(*) FROM ledger_entries WHERE type = 'DEBIT'`, nil, &debitCount)
+	mustScan(t, pool, `SELECT COUNT(*) FROM ledger_entries WHERE type = 'CREDIT'`, nil, &creditCount)
+	if debitCount != creditCount {
+		t.Errorf("expected equal DEBIT and CREDIT entry counts, got %d debits and %d credits", debitCount, creditCount)
+	}
+}

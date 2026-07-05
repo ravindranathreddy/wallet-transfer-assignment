@@ -203,4 +203,22 @@ Claude Code (Anthropic CLI agent).
 
 33. "commit and push this" — committing the integration test suite and Makefile changes.
 
+34. "wire CI to run make test-integration, Also wrote more testcases with AI" — reviewed the
+    new handler_test.go/router_test.go (using a new transferService interface the handler
+    now depends on, enabling a fake in tests instead of a real DB) and the additions to the
+    existing integration suite (LockForUpdate not-found/blocking coverage on the transfer
+    row, DB CHECK-constraint verification independent of app-level guards, a ledger-vs-balance
+    reconciliation test computed independently via SUM() over ledger_entries, and replaying a
+    FAILED transfer). Ran the full unit + integration suite (including -race, repeated 3x) —
+    all passed; no findings. Wired CI (.github/workflows/ci.yml): added steps to start
+    postgres via docker-compose, run migrations, and run `make test-integration` after the
+    existing lint/format/unit-test steps, with teardown on `if: always()`. Also bumped
+    actions/setup-go from 1.24 to 1.26.3 to match go.mod, noticed while doing this work --
+    the mismatch meant every CI run was silently depending on Go's network toolchain
+    auto-download. Flagged (but did not change, out of scope for this ask) that
+    `make fmt`/`gofmt -l .` lists misformatted files without failing the command, so it
+    wouldn't actually gate CI if wired as FORMAT_CHECK_CMD.
+
+35. "commit and push this" — committing the CI wiring and handler test suite.
+
 <!-- Append new prompts below, in order, as the session continues. -->

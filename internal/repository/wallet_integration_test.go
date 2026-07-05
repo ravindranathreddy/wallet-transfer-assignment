@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/ravindranathreddy/wallet-transfer-assignment/internal/domain"
 	"github.com/ravindranathreddy/wallet-transfer-assignment/internal/repository"
 	"github.com/ravindranathreddy/wallet-transfer-assignment/internal/testutil"
@@ -108,5 +109,24 @@ func TestWalletRepository_UpdateBalance(t *testing.T) {
 	}
 	if wallet.Balance != 250 {
 		t.Errorf("expected balance 250, got %d", wallet.Balance)
+	}
+}
+
+// TestWalletRepository_UpdateBalance_RejectsNegativeBalance proves the
+// wallets.balance >= 0 CHECK constraint is enforced by Postgres itself, not
+// just by the service layer's HasSufficientFunds guard.
+func TestWalletRepository_UpdateBalance_RejectsNegativeBalance(t *testing.T) {
+	pool := testutil.NewPool(t)
+	testutil.TruncateAll(t, pool)
+	testutil.SeedWallet(t, pool, "wallet_1", 50)
+
+	repo := repository.NewWalletRepository()
+	err := repo.UpdateBalance(context.Background(), pool, "wallet_1", -1)
+	if err == nil {
+		t.Fatal("expected the balance >= 0 CHECK constraint to reject a negative balance, got nil")
+	}
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+		t.Errorf("expected a check_violation (23514), got %v", err)
 	}
 }

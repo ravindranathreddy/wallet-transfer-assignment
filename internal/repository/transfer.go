@@ -45,6 +45,9 @@ func (r *TransferRepository) LockForUpdate(ctx context.Context, tx pgx.Tx, trans
 	var transfer domain.Transfer
 	err := tx.QueryRow(ctx, query, transferID).Scan(&transfer.ID, &transfer.FromWalletID, &transfer.ToWalletID, &transfer.Amount, &transfer.Status, &transfer.FailureReason, &transfer.CreatedAt, &transfer.UpdatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Transfer{}, domain.ErrTransferNotFound
+		}
 		return domain.Transfer{}, err
 	}
 	return transfer, nil

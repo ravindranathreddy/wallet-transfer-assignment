@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,13 +12,20 @@ import (
 	"github.com/ravindranathreddy/wallet-transfer-assignment/internal/service"
 )
 
+// transferService is the subset of *service.TransferService the handler
+// depends on. Declaring it lets tests substitute a fake without hitting a
+// real database.
+type transferService interface {
+	CreateTransfer(ctx context.Context, req service.CreateTransferRequest) (domain.Transfer, error)
+}
+
 // TransferHandler serves the /transfers endpoints.
 type TransferHandler struct {
-	service *service.TransferService
+	service transferService
 }
 
 // NewTransferHandler constructs a TransferHandler around a TransferService.
-func NewTransferHandler(svc *service.TransferService) *TransferHandler {
+func NewTransferHandler(svc transferService) *TransferHandler {
 	return &TransferHandler{service: svc}
 }
 
