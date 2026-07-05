@@ -72,4 +72,31 @@ Claude Code (Anthropic CLI agent).
     index all matched design.md) before tearing it down. No schema decisions made — the
     schema itself was already finalized by the user.
 
+11. "have implemented domain will add entities,validation at a high level and also add
+    request validation in handler.Will add more validations etc as required, also
+    implemented request validation in handler. Review these" — reviewed the user's domain
+    entities (Wallet/Transfer/LedgerEntry/IdempotencyRecord) and handler request validation
+    as a senior-engineer pass: flagged a compile-breaking undefined-error reference, a
+    Currency field/param mismatch against the finalized (currency-less) schema, and an
+    unused errorResponseDTO/plain-text-vs-JSON inconsistency in error responses. No code
+    written on the user's behalf — findings only; `go mod tidy` run to fix uuid's direct/
+    indirect require grouping (dependency-wiring housekeeping).
+
+12. "1. written but not saved. 2. removed, 3. implemented but not saved 4. handlers just
+    validates request and domain.NewPendingTransfer gives transfer and i do not want
+    transfer object with non-positive and with wallet validation. 5. good catch added 6.
+    Added. Good one" — confirmed fixes in progress; clarified that domain-level validation
+    in NewPendingTransfer is intentional defense-in-depth, not accidental duplication with
+    the handler's own checks.
+
+13. "saved" / "saved right now check" — re-checked disk state each time; first pass still
+    showed unsaved edits (Wallet.Currency and unused currency params still present), second
+    pass confirmed they were gone and the build/vet/gofmt were clean.
+
+14. "remove the currency field from the DTO" — found the user had already removed
+    transferResponseDTO.Currency before the request landed; confirmed build still clean.
+
+15. "commit this" — committed the domain model (Wallet, Transfer state machine,
+    LedgerEntry, IdempotencyRecord) and CreateTransfer request validation.
+
 <!-- Append new prompts below, in order, as the session continues. -->
