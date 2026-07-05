@@ -65,4 +65,11 @@ Claude Code (Anthropic CLI agent).
    idempotency check-then-insert race and the unique-violation-as-signal handling, per the
    user's confirmed answer to review point #3.
 
+10. "Let's start implementing the migrations for the schema, I have already given the schema
+    in design.md add these to migrations folder" — transcribed the already-finalized schema
+    from design.md into migrations/000001_init_schema.{up,down}.sql via golang-migrate
+    naming, then verified up/down against a real Postgres container (constraints, FKs,
+    index all matched design.md) before tearing it down. No schema decisions made — the
+    schema itself was already finalized by the user.
+
 <!-- Append new prompts below, in order, as the session continues. -->
