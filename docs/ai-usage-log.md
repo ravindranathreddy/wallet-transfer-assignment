@@ -180,4 +180,27 @@ Claude Code (Anthropic CLI agent).
 
 29. "commit and push this" — committing the domain unit test suite.
 
+30. "lets reuse docker-compose rather than testcontainers" — locked in the integration-test
+    DB strategy; asked the remaining question about unit/integration separation.
+
+31. (clarifying-question, answered) Test separation → Go build tag
+    (`//go:build integration`). Added `make test` (unit only) and `make test-integration`
+    (runs tagged tests) to the Makefile — boilerplate only, no test code written.
+
+32. "I have used Ai to write these tests, Please review" — reviewed the full integration
+    suite (internal/testutil, repository/*_integration_test.go,
+    service/service_integration_test.go, service_concurrency_integration_test.go,
+    service_internal_integration_test.go) as a senior-engineer pass. Actually ran the suite
+    against a real Postgres (docker compose + migrate), including under `go test -race` and
+    repeated 5x for flakiness — all passed. Confirmed the concurrency tests exercise real
+    scenarios: FOR UPDATE actually blocking a second transaction, the same-idempotencyKey
+    race this session's earlier fix addressed, the insufficient-balance-for-both race, and
+    the circular-chain deadlock-avoidance case from design.md. No findings; no code written
+    on the user's behalf. Incidentally discovered a native (non-Docker) Postgres already
+    listening on localhost:5432 on this machine, which was intercepting the test connection
+    ahead of Docker's port-forward — a local environment fact, not a code or test issue,
+    worked around by remapping the container's host port for verification only.
+
+33. "commit and push this" — committing the integration test suite and Makefile changes.
+
 <!-- Append new prompts below, in order, as the session continues. -->

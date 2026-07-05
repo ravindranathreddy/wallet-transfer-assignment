@@ -1,4 +1,4 @@
-.PHONY: build run test fmt lint tidy \
+.PHONY: build run test test-integration fmt lint tidy \
 	docker-up docker-down docker-logs \
 	migrate-create migrate-up migrate-down
 
@@ -8,8 +8,19 @@ build:
 run:
 	go run ./cmd/server
 
+# Unit tests only (domain, etc). No external dependencies required.
 test:
 	go test ./...
+
+# Integration tests (service/repository) tagged `//go:build integration`.
+# Requires a migrated Postgres reachable via the DB_* env vars (defaults
+# match docker-compose): `docker compose up -d postgres && make migrate-up`.
+# -p 1 forces packages to run sequentially: repository/service integration
+# tests share one physical DB (truncate-then-seed per test), so letting Go
+# run those two test binaries as parallel OS processes causes cross-package
+# TRUNCATE/INSERT races (duplicate keys, even real Postgres deadlocks).
+test-integration:
+	go test -tags=integration -p 1 ./...
 
 fmt:
 	gofmt -l .
