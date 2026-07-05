@@ -51,7 +51,6 @@ type errorResponseDTO struct {
 }
 
 // CreateTransfer handles POST /transfers.
-// TODO: request validation, invoking TransferService, response/error mapping.
 func (h *TransferHandler) CreateTransfer(w http.ResponseWriter, r *http.Request) {
 	var req createTransferRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
